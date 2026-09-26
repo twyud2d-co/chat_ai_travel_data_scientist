@@ -1,6 +1,6 @@
 import streamlit as st
-import requests
 import google.generativeai as genai
+from pathlib import Path
 
 # --- 1. PENGATURAN HALAMAN & UI ---
 st.title("✈️ Asisten Travel Cerdas (Powered by Gemini)")
@@ -28,18 +28,24 @@ with st.sidebar:
         index=gaya_bahasa_options.index(gaya_bahasa_default),
     )
 
-# --- 3. MENGAMBIL DATA DARI GITHUB ---
+# --- 3. MEMUAT DATA REFERENSI DARI REPOSITORY ---
 @st.cache_data
-def ambil_data_github():
-    # GANTI URL DI BAWAH INI dengan URL 'Raw' dari file di GitHub Anda
-    url = "https://raw.githubusercontent.com/username/repo/main/info_travel.txt"
-    try:
-        response = requests.get(url)
-        return response.text
-    except:
-        return "Gagal mengambil data referensi travel."
+def ambil_data_referensi():
+    nama_file_data = (
+        "info_travel.txt",
+        "destinasi_wisata.txt",
+        "tips_perjalanan.txt",
+    )
+    bagian_data = []
 
-pengetahuan_travel = ambil_data_github()
+    for nama_file in nama_file_data:
+        path_file = Path(__file__).parent / nama_file
+        isi_file = path_file.read_text(encoding="utf-8").strip()
+        bagian_data.append(f"=== {nama_file} ===\n{isi_file}")
+
+    return "\n\n".join(bagian_data)
+
+pengetahuan_travel = ambil_data_referensi()
 
 # --- 4. MEMORI PERCAKAPAN (CHAT HISTORY) ---
 if "riwayat_chat" not in st.session_state:
@@ -69,16 +75,23 @@ if pertanyaan := st.chat_input("Ketik pertanyaan travel kamu di sini..."):
             # Konfigurasi kunci API Google
             genai.configure(api_key=api_key)
 
-            # Instruksi Rahasia (System Prompt) dimasukkan saat membuat model
+                        # Jawaban faktual harus dibatasi pada referensi yang dimuat dari file TXT.
             instruksi_sistem = f"""
             Kamu adalah asisten travel.
             Gunakan gaya bahasa: {gaya_bahasa}.
 
-            Gunakan informasi dari database berikut untuk menjawab pertanyaan:
-            {pengetahuan_travel}
+                        ATURAN WAJIB:
+                        - Jawab hanya menggunakan fakta yang secara jelas tertulis dalam database di bawah ini.
+                        - Jangan gunakan pengetahuan umum, tebakan, asumsi, atau informasi dari luar database.
+                        - Riwayat percakapan hanya boleh dipakai untuk memahami konteks dan rujukan pengguna,
+                            bukan sebagai sumber fakta tambahan.
+                        - Jika jawaban tidak tersedia atau tidak cukup didukung oleh database, jangan menebak.
+                            Jawab: "Maaf, informasi tersebut tidak tersedia di data referensi travel saya."
+                        - Jika hanya sebagian pertanyaan didukung data, jawab bagian yang didukung dan jelaskan
+                            bahwa bagian lainnya tidak tersedia di data referensi.
 
-            Jika informasi yang ditanyakan tidak ada di database, gunakan pengetahuan umummu,
-            tapi beritahu pengguna bahwa informasi tersebut bersifat umum.
+                        DATABASE REFERENSI:
+            {pengetahuan_travel}
             """
 
             # Inisialisasi model Gemini Flash yang tersedia untuk API key ini.
